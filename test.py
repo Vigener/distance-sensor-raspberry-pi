@@ -14,6 +14,12 @@
 
 distance_to_lane = 10 # レーンまでの距離（仮）
 distance = 0 # 検知する距離(センサーを用いる)
+
+# GPIOの設定
+import RPi.GPIO as GPIO
+import time
+
+
 while True:
     # 製品が流れてきていない状態（距離が'distance_to_lane'以上)のとき
     # もしくは
