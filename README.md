@@ -1,3 +1,60 @@
 # 変更点
+
 - 現在 Wayland
-- [Raspberry PiでウィンドウマネージャーをX11 / Waylandに切り替える](https://www.indoorcorgielec.com/resources/raspberry-pi/window-manager)
+- [Raspberry Pi でウィンドウマネージャーを X11 / Wayland に切り替える](https://www.indoorcorgielec.com/resources/raspberry-pi/window-manager)
+
+# ファイルの説明
+
+## main.py
+
+個数枚数センサ動作の実行スクリプト
+
+### フローチャート
+
+```pgsql
+[スタート]
+   ↓
+[LED橙 ON（スタンバイ）]
+   ↓
+[トグルスイッチがONになるのを待機]
+   ↓
+[リレー1 ON / LED緑 ON]
+   ↓
+[メインループ開始]
+   ↓
+ ┌──────────────────────────┐
+ │ トグルスイッチがONか?      │
+ └─────┬────────────────────┘
+       │Yes
+       ↓
+ [センサー1がアクティブ？]
+       │No
+       └──> ループ継続
+       ↓Yes
+ [0.1秒待機]
+       ↓
+ [センサー2がアクティブ？]
+   ┌───────┴────────┐
+   │Yes              No
+   ↓                 ↓
+[LED青 ON]     [handle_error 実行]
+   ↓                 ↓
+[センサー1が      [センサー1が
+ オフになるのを     オフになるのを
+ 待機]              待機]
+   ↓                 ↓
+   └───────┬────────┘
+           ↓
+      [ループ先頭へ]
+           │
+      ┌────┴─────┐
+      ↓          No
+[トグルスイッチがOFFか？]
+      ↓Yes
+[リレー1 OFF / LED緑 OFF]
+      ↓
+[3秒ごとにトグルスイッチ確認]
+      ↓
+[ONになったら再開（→ループへ）]
+
+```

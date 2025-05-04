@@ -46,7 +46,7 @@ def standby(gpio):
 
 def wait_for_activation(device):
     while not device.is_active:
-        sleep(0.1)
+        sleep(3)
 
 def wait_for_deactivation(device):
     while device.is_active:
@@ -54,9 +54,9 @@ def wait_for_deactivation(device):
 
 def handle_error(gpio):
     gpio.leds["blue"].off()
-    gpio.relays["relay2"].on()
-    gpio.buzzer.on()
-    gpio.leds["red"].on()
+    gpio.relays["relay2"].on() # 包装機への停止信号
+    gpio.buzzer.on() # エラー音
+    gpio.leds["red"].on() # エラーLED点灯
     sleep(1)
     
     gpio.relays["relay2"].off()
@@ -68,10 +68,26 @@ def handle_error(gpio):
 
 def run_main_process(gpio):
     while True:
+        # トグルスイッチがOFFなら処理停止
+        if not gpio.toggle_switch.is_active:
+            gpio.relays["relay1"].off()
+            gpio.leds["green"].off()
+            
+            # トグルスイッチがONになるまで3秒ごとに確認
+            while not gpio.toggle_switch.is_active:
+                sleep(3)
+
+            # 再開
+            gpio.relays["relay1"].on()
+            gpio.leds["green"].on()
+            sleep(1)
+
+        # 通常処理
         if gpio.sensors["sensor1"].is_active:
             sleep(0.1)
             
             if gpio.sensors["sensor2"].is_active:
+                gpio.leds["red"].off()
                 gpio.leds["blue"].on()
                 wait_for_deactivation(gpio.sensors["sensor1"])
             else:
