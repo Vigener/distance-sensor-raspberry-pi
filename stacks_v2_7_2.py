@@ -47,16 +47,16 @@ def write_csv_log(event_type, result, detail=""):
     date_str = now.strftime("%Y%m%d")
     time_str = now.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # ミリ秒まで記録
     filename = os.path.join(LOG_DIR, f"wafer_log_{date_str}.csv")
-    
+
     file_exists = os.path.isfile(filename)
-    
+
     try:
         with open(filename, mode='a', newline='', encoding='utf-8-sig') as f:
             writer = csv.writer(f)
             # 新規ファイル作成時はヘッダーを書き込む
             if not file_exists:
                 writer.writerow(["日時", "イベント種別", "判定結果", "詳細"])
-            
+
             writer.writerow([time_str, event_type, result, detail])
     except Exception as e:
         logging.error(f"CSV書き込み失敗: {e}")
@@ -108,6 +108,14 @@ def update_status_leds():
             led_yellow.on()
         else:
             led_yellow.off()
+
+def cleanup_outputs():
+    """終了時に全出力をOFF"""
+    led_green.off()
+    led_yellow.off()
+    led_red.off()
+    relay_stop.off()
+    buzzer.off()
 
 # ==========================================
 # 4. 制御ロジック・イベントハンドラ
@@ -176,31 +184,33 @@ def judge_wafer():
 # 5. メインプログラム実行部
 # ==========================================
 
-# 通電時の初期状態を設定 (LED③赤点灯)
-update_status_leds()
+def bind_handlers():
+    """割り込みイベントの紐付け"""
+    pb_on.when_pressed = on_system_start
+    pb_off.when_pressed = on_system_stop
+    pb_reset.when_pressed = on_reset
+    beam_trig.when_pressed = judge_wafer
 
-# 割り込みイベントの紐付け
-pb_on.when_pressed = on_system_start
-pb_off.when_pressed = on_system_stop
-pb_reset.when_pressed = on_reset
-beam_trig.when_pressed = judge_wafer
+def initialize_runtime():
+    """通電時の初期状態とハンドラ設定"""
+    update_status_leds()
+    bind_handlers()
+    logging.info("==============================================")
+    logging.info(" 枚数検知監視 プログラムVer 2.7.2 (C-MOSゾーン判定仕様) ")
+    logging.info(" 保存先: " + LOG_DIR)
+    logging.info(" ボタン①の入力を待っています... ")
+    logging.info("==============================================")
+    write_csv_log("システム状態", "通電起動", "プログラム初期化完了")
 
-logging.info("==============================================")
-logging.info(" 枚数検知監視 プログラムVer 2.7.2 (C-MOSゾーン判定仕様) ")
-logging.info(" 保存先: " + LOG_DIR)
-logging.info(" ボタン①の入力を待っています... ")
-logging.info("==============================================")
+def main():
+    initialize_runtime()
+    try:
+        pause()
+    except KeyboardInterrupt:
+        logging.info("手動終了を検出しました。")
+        write_csv_log("システム状態", "手動終了", "KeyboardInterrupt")
+    finally:
+        cleanup_outputs()
 
-write_csv_log("システム状態", "通電起動", "プログラム初期化完了")
-
-try:
-    pause()
-except KeyboardInterrupt:
-    logging.info("手動終了を検出しました。")
-    write_csv_log("システム状態", "手動終了", "KeyboardInterrupt")
-finally:
-    led_green.off()
-    led_yellow.off()
-    led_red.off()
-    relay_stop.off()
-    buzzer.off()
+if __name__ == "__main__":
+    main()
