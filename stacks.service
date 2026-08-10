@@ -22,8 +22,8 @@ After=multi-user.target
 [Service]
 Type=simple
 User=raspai
-WorkingDirectory=/home/raspai/distance-sensor-raspberry-pi
-ExecStart=/usr/bin/python3 /home/raspai/distance-sensor-raspberry-pi/stacks_v2_7_2.py
+WorkingDirectory=/home/raspai/Desktop
+ExecStart=/usr/bin/python3 /home/raspai/Desktop/stacks_v2_7_2.py
 Restart=on-failure
 RestartSec=3
 
