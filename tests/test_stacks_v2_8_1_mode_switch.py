@@ -47,6 +47,21 @@ def stacks_mode_on(load_stacks):
     return mod
 
 
+@pytest.fixture
+def stacks_mode_on_v282(load_stacks):
+    from mode_switch_settings import write_enable_mode_switch
+
+    mod = load_stacks("stacks_v2_8_2")
+    write_enable_mode_switch(True, Path(mod._STACKS_DIR))
+    mod.reload_mode_switch_config()
+    mod.MODE_BEEP_DURATION = 0
+    mod.MODE_BEEP_GAP = 0
+    mod.state.sheet_mode = 3
+    mod._mode_feedback_busy = False
+    mod.update_status_leds()
+    return mod
+
+
 def test_flag_false_yellow_button_noop(stacks_mode_off):
     mod = stacks_mode_off
     assert mod.ENABLE_MODE_SWITCH is False
@@ -84,6 +99,16 @@ def test_toggle_switches_active_cmos(stacks_mode_on):
     _press_yellow(mod)
     assert mod.state.sheet_mode == 3
     assert mod.active_cmos() is mod.cmos_out1
+
+
+def test_v282_conf_true_toggles_like_v281(stacks_mode_on_v282):
+    mod = stacks_mode_on_v282
+    assert mod.ENABLE_MODE_SWITCH is True
+    mod.pb_on.press()
+    mod.pb_on.release()
+    _press_yellow(mod)
+    assert mod.state.sheet_mode == 2
+    assert mod.active_cmos() is mod.cmos_out2
 
 
 def test_judgment_uses_selected_channel(stacks_mode_on):

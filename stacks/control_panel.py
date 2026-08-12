@@ -2,18 +2,28 @@
 # -*- coding: utf-8 -*-
 """
 stacks 操作用 GUI（ダブルクリック想定）
-セットアップ / 開始 / 停止 / ログ表示をボタンで実行する。
+セットアップ / 開始 / 停止 / ログ / モード切替機能トグル
 """
 
 from __future__ import annotations
 
 import subprocess
+import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, scrolledtext
 
 STACKS_DIR = Path(__file__).resolve().parent
 EXPECTED_DIR = Path.home() / "Desktop" / "stacks"
+
+# 同じフォルダの mode_switch_settings を優先
+if str(STACKS_DIR) not in sys.path:
+    sys.path.insert(0, str(STACKS_DIR))
+
+from mode_switch_settings import (  # noqa: E402
+    read_enable_mode_switch,
+    write_enable_mode_switch,
+)
 
 
 def run_cmd(args: list[str], timeout: int = 120) -> tuple[int, str]:
@@ -37,7 +47,6 @@ def run_bash_script(name: str) -> tuple[int, str]:
     script = STACKS_DIR / name
     if not script.is_file():
         return 1, f"{name} が見つかりません: {script}"
-    # USB経由で実行権限が消えていても動くよう bash 経由
     return run_cmd(["bash", str(script)])
 
 
@@ -45,8 +54,8 @@ class ControlPanel(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("stacks 制御パネル")
-        self.geometry("720x520")
-        self.minsize(560, 400)
+        self.geometry("780x560")
+        self.minsize(600, 420)
 
         warn = ""
         if STACKS_DIR != EXPECTED_DIR:
@@ -78,10 +87,24 @@ class ControlPanel(tk.Tk):
                 bg=color,
                 fg="white",
                 activebackground=color,
-                font=("Sans", 12, "bold"),
+                font=("Sans", 11, "bold"),
             )
             b.grid(row=0, column=i, sticky="ew", padx=4)
             btn_frame.columnconfigure(i, weight=1)
+
+        mode_frame = tk.Frame(self)
+        mode_frame.pack(fill="x", padx=12, pady=(0, 8))
+        self.mode_btn = tk.Button(
+            mode_frame,
+            text=self._mode_button_label(),
+            command=self.do_toggle_mode_switch,
+            height=2,
+            bg="#ef6c00",
+            fg="white",
+            activebackground="#ef6c00",
+            font=("Sans", 11, "bold"),
+        )
+        self.mode_btn.pack(fill="x")
 
         self.status = tk.Label(self, text="準備完了", anchor="w")
         self.status.pack(fill="x", padx=12)
@@ -94,8 +117,17 @@ class ControlPanel(tk.Tk):
             "・一時停止したいとき → ③ 停止\n"
             "・また動かしたいとき → ② 開始\n"
             "・おかしいとき → ④ ログ\n"
+            "・黄ボタンの 3枚/2枚 切替機能を使うとき → ⑤（下のオレンジボタン）\n"
             "・本体の監視開始は、機械のボタン①です（この画面とは別）\n"
         )
+
+    def _mode_button_label(self) -> str:
+        on = read_enable_mode_switch(STACKS_DIR)
+        state = "有効" if on else "無効"
+        return f"⑤ モード切替機能: いま{state}（押すと切替）"
+
+    def _refresh_mode_button(self) -> None:
+        self.mode_btn.config(text=self._mode_button_label())
 
     def _append(self, text: str) -> None:
         self.log.insert("end", text.rstrip() + "\n\n")
@@ -132,6 +164,52 @@ class ControlPanel(tk.Tk):
         code, out = run_bash_script("show-logs.sh")
         self._append(f"===== 状態・ログ =====\n{out or '(出力なし)'}\n終了コード: {code}")
         self._set_busy("ログ表示完了")
+
+    def do_toggle_mode_switch(self) -> None:
+        current = read_enable_mode_switch(STACKS_DIR)
+        new_value = not current
+        new_label = "有効" if new_value else "無効"
+        msg = (
+            "機械は停止していますか？\n\n"
+            f"モード切替機能を「{new_label}」に変更します。\n"
+            "枚数検知プロセスをいったん停止し、設定反映のため再起動します。\n"
+            "（ラズパイ本体の再起動は不要です）\n\n"
+            "続行しますか？"
+        )
+        if not messagebox.askokcancel("モード切替機能の変更", msg):
+            return
+
+        self._set_busy(f"モード切替機能を {new_label} に変更中...")
+        try:
+            path = write_enable_mode_switch(new_value, STACKS_DIR)
+        except OSError as exc:
+            messagebox.showerror("エラー", f"設定ファイルを書けませんでした:\n{exc}")
+            self._set_busy("エラー")
+            return
+
+        code, out = run_cmd(["sudo", "systemctl", "restart", "stacks.service"])
+        self._append(
+            f"===== モード切替機能 → {new_label} =====\n"
+            f"conf: {path}\n{out or '(出力なし)'}\n"
+            f"restart 終了コード: {code}"
+        )
+        self._refresh_mode_button()
+        if code != 0:
+            messagebox.showerror(
+                "エラー",
+                "設定は書き込みましたが、サービス再起動に失敗した可能性があります。\n"
+                "④ ログで状態を確認するか、① セットアップ後にもう一度試してください。",
+            )
+            self._set_busy("再起動エラー（設定は保存済み）")
+            return
+
+        messagebox.showinfo(
+            "完了",
+            f"モード切替機能を「{new_label}」にしました。\n"
+            "プロセスを再起動済みです。\n"
+            "監視開始は機械のボタン①です。",
+        )
+        self._set_busy(f"モード切替機能: {new_label}")
 
 
 def main() -> None:

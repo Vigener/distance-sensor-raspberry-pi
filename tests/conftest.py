@@ -17,7 +17,7 @@ from tests import fake_gpiozero
 REAL_EXISTS = os.path.exists
 
 MANUAL_RESET_MODULES = ("stacks_v2_7_2", "stacks_v2_7_3")
-AUTO_CLEAR_MODULES = ("stacks_v2_8_0", "stacks_v2_8_1")
+AUTO_CLEAR_MODULES = ("stacks_v2_8_0", "stacks_v2_8_1", "stacks_v2_8_2")
 ALL_ALGORITHM_MODULES = MANUAL_RESET_MODULES + AUTO_CLEAR_MODULES
 
 
@@ -70,6 +70,11 @@ def load_stacks(monkeypatch, tmp_path):
             mod.MODE_BEEP_GAP = 0
         if hasattr(mod, "ENABLE_MODE_SWITCH"):
             mod.ENABLE_MODE_SWITCH = False
+        if hasattr(mod, "reload_mode_switch_config"):
+            from mode_switch_settings import write_enable_mode_switch
+
+            write_enable_mode_switch(False, Path(mod._STACKS_DIR))
+            mod.reload_mode_switch_config()
 
         monkeypatch.setattr(mod.time, "sleep", lambda _s: None)
 
