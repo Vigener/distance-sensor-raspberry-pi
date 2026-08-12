@@ -14,9 +14,10 @@ def _csv_rows(mod):
     return path.read_text(encoding="utf-8-sig").strip().splitlines()
 
 
-def test_beam_has_bounce_time(load_stacks):
+def test_beam_has_no_gpiozero_bounce_time(load_stacks):
+    """短パルス取りこぼし防止のため、ビームに bounce_time を付けない"""
     mod = load_stacks("stacks_v2_7_3")
-    assert mod.beam_trig.bounce_time == mod.BOUNCE_TIME
+    assert mod.beam_trig.bounce_time is None
 
 
 def test_v2_7_2_beam_has_no_bounce_time(load_stacks):
@@ -26,12 +27,29 @@ def test_v2_7_2_beam_has_no_bounce_time(load_stacks):
 
 def test_startup_forces_relay_and_buzzer_off(load_stacks):
     mod = load_stacks("stacks_v2_7_3")
-    # initialize 前にONだったとしても、initialize_runtime でOFFになること
     mod.relay_stop.on()
     mod.buzzer.on()
     mod.initialize_runtime()
     assert mod.relay_stop.is_active is False
     assert mod.buzzer.is_active is False
+
+
+def test_inactive_beam_does_not_disarm(load_stacks):
+    """監視OFF中の遮光で disarm すると、解放欠落時に以後ずっと検知不能になる"""
+    mod = load_stacks("stacks_v2_7_3")
+    assert mod._beam_armed is True
+
+    mod.cmos_out1.is_pressed = False
+    mod.beam_trig.press()
+    # 解放なし（エッジ欠落を模擬）
+    assert mod._beam_armed is True
+    assert mod.state.is_ng_locked is False
+
+    mod.pb_on.press()
+    mod.beam_trig.release()
+    mod.beam_trig.press()
+    mod.beam_trig.release()
+    assert mod.state.is_ng_locked is True
 
 
 def test_chatter_without_release_judges_only_once(load_stacks):
@@ -45,8 +63,6 @@ def test_chatter_without_release_judges_only_once(load_stacks):
     assert mod.state.is_ng_locked is True
     assert first_relay >= 1
 
-    # release せずに再度 press 相当（すでに pressed なので Fake は再発火しない）。
-    # 明示的に when_pressed を二重呼び出ししてチャタを模擬する。
     mod.beam_trig.when_pressed()
     assert mod.relay_stop.on_count == first_relay
 

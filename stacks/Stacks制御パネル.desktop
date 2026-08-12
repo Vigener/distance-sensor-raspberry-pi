@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Stacks制御パネル
+Name[ja]=Stacks制御パネル
+Comment=枚数検知 stacks のセットアップ・開始・停止・ログ確認
+Exec=python3 /home/raspai/Desktop/stacks/control_panel.py
+Path=/home/raspai/Desktop/stacks
+Icon=utilities-terminal
+Terminal=false
+Categories=Utility;
+StartupNotify=true

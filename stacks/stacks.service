@@ -1,0 +1,22 @@
+# 枚数検知監視 stacks.py の systemd ユニット
+#
+# 配置前提: /home/raspai/Desktop/stacks/
+# 初回セットアップは同じフォルダの setup.sh を実行すること。
+
+[Unit]
+Description=Senbei stack count monitor (stacks.py)
+After=multi-user.target
+
+[Service]
+Type=simple
+User=raspai
+WorkingDirectory=/home/raspai/Desktop/stacks
+ExecStart=/usr/bin/python3 /home/raspai/Desktop/stacks/stacks.py
+Restart=on-failure
+RestartSec=3
+
+# gpiozero / GPIO アクセス用（ユーザーが gpio グループに入っている前提）
+SupplementaryGroups=gpio
+
+[Install]
+WantedBy=multi-user.target

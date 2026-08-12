@@ -34,7 +34,7 @@ BUZZER_PULSE = 3.0    # 警報ブザーの鳴動時間 (秒)
 BOUNCE_TIME = 0.05     # 押しボタンのチャタリング防止用マスク時間 (秒)。ビームには使わない
 
 # CSVログ保存先設定
-LOG_DIR = "/home/raspai/Desktop/logs"  # ログを保存するフォルダパス
+LOG_DIR = "/home/raspai/Desktop/stacks/logs"  # 判定CSVの保存先（USB配置先と同じツリー）
 SAVE_OK_LOG = False              # OK時の判定もCSVに記録するかどうか (FalseにするとNG時とステータス変化のみ記録)
 
 # ログ出力ディレクトリの作成
