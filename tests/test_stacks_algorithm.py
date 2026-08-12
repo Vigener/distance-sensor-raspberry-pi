@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-stacks_v2_7_2 の現行アルゴリズム契約テスト。
+共通アルゴリズム契約テスト。
 
-v2_7_3 も同じ契約を満たすこと（堅牢化で基本動作を壊さないこと）を
-@param stacks で両モジュールに対して検証する。
+- 全バージョン: ON/OFF/OK/NGパルス等
+- 人手リセット系は stacks_manual_reset のみ
+- 自動復帰系のロック持続は別ファイルで検証
 """
 from datetime import datetime
 from pathlib import Path
 
 import pytest
+
+from tests.conftest import AUTO_CLEAR_MODULES, ALL_ALGORITHM_MODULES, join_background_threads
 
 
 def _csv_rows(mod):
@@ -16,14 +19,14 @@ def _csv_rows(mod):
     path = Path(mod.LOG_DIR) / f"wafer_log_{date_str}.csv"
     if not path.exists():
         return []
-    lines = path.read_text(encoding="utf-8-sig").strip().splitlines()
-    return lines
+    return path.read_text(encoding="utf-8-sig").strip().splitlines()
 
 
 def _trigger_beam(mod, cmos_ok: bool):
     mod.cmos_out1.is_pressed = cmos_ok
+    if hasattr(mod, "cmos_out2"):
+        mod.cmos_out2.is_pressed = cmos_ok
     mod.beam_trig.press()
-    # v2_7_3 は透過待ちがあるため、共通シナリオでは必ず release する
     mod.beam_trig.release()
 
 
@@ -39,9 +42,7 @@ def test_power_on_is_inactive_red_led(stacks):
 
 
 def test_startup_csv_log(stacks):
-    mod = stacks
-    rows = _csv_rows(mod)
-    assert any("通電起動" in r for r in rows)
+    assert any("通電起動" in r for r in _csv_rows(stacks))
 
 
 def test_on_button_starts_monitoring(stacks):
@@ -86,11 +87,10 @@ def test_ok_judgment_does_not_lock_or_pulse(stacks):
     assert mod.led_yellow.is_active is False
     assert mod.relay_stop.on_count == relay_before
     assert mod.buzzer.on_count == buzzer_before
-    # デフォルト SAVE_OK_LOG=False のため OK 行は出ない
     assert not any("枚数判定" in r and ",OK," in r for r in _csv_rows(mod))
 
 
-@pytest.mark.parametrize("module_name", ["stacks_v2_7_2", "stacks_v2_7_3"])
+@pytest.mark.parametrize("module_name", list(ALL_ALGORITHM_MODULES))
 def test_ok_log_when_enabled(load_stacks, module_name):
     mod = load_stacks(module_name)
     mod.SAVE_OK_LOG = True
@@ -99,21 +99,27 @@ def test_ok_log_when_enabled(load_stacks, module_name):
     assert any("枚数判定" in r and ",OK," in r for r in _csv_rows(mod))
 
 
-def test_ng_locks_and_pulses_outputs(stacks):
+def test_ng_pulses_and_logs(stacks):
     mod = stacks
     mod.pb_on.press()
     _trigger_beam(mod, cmos_ok=False)
 
-    assert mod.state.is_ng_locked is True
-    assert mod.led_yellow.is_active is True
     assert mod.led_green.is_active is True
     assert mod.relay_stop.on_count >= 1
     assert mod.buzzer.on_count >= 1
     assert any("枚数判定" in r and ",NG," in r for r in _csv_rows(mod))
 
+    if mod.__name__ in AUTO_CLEAR_MODULES:
+        join_background_threads()
+        assert mod.state.is_ng_locked is False
+        assert mod.led_yellow.is_active is False
+    else:
+        assert mod.state.is_ng_locked is True
+        assert mod.led_yellow.is_active is True
 
-def test_ng_lock_blocks_further_judgment(stacks):
-    mod = stacks
+
+def test_ng_lock_blocks_further_judgment_manual_reset(stacks_manual_reset):
+    mod = stacks_manual_reset
     mod.pb_on.press()
     _trigger_beam(mod, cmos_ok=False)
     relay_after_first = mod.relay_stop.on_count
@@ -122,8 +128,8 @@ def test_ng_lock_blocks_further_judgment(stacks):
     assert mod.relay_stop.on_count == relay_after_first
 
 
-def test_reset_clears_ng_lock_and_allows_next(stacks):
-    mod = stacks
+def test_reset_clears_ng_lock_and_allows_next(stacks_manual_reset):
+    mod = stacks_manual_reset
     mod.pb_on.press()
     _trigger_beam(mod, cmos_ok=False)
     assert mod.state.is_ng_locked is True
@@ -136,8 +142,8 @@ def test_reset_clears_ng_lock_and_allows_next(stacks):
     assert mod.state.is_ng_locked is False
 
 
-def test_reset_ignored_when_not_locked(stacks):
-    mod = stacks
+def test_reset_ignored_when_not_locked(stacks_manual_reset):
+    mod = stacks_manual_reset
     mod.pb_on.press()
     mod.pb_reset.press()
     assert mod.state.is_active is True
@@ -149,6 +155,9 @@ def test_off_clears_ng_lock(stacks):
     mod = stacks
     mod.pb_on.press()
     _trigger_beam(mod, cmos_ok=False)
+    if mod.__name__ in AUTO_CLEAR_MODULES:
+        # 自動復帰前にOFFしても落ちること
+        pass
     mod.pb_off.press()
     assert mod.state.is_active is False
     assert mod.state.is_ng_locked is False
